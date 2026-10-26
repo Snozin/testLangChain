@@ -1,6 +1,7 @@
 import { createAgent, summarizationMiddleware } from 'langchain'
 import { checkServerSlots } from '../utils/checkServerSlots.js'
 import { initSystemPrompt } from '../utils/utils.js'
+import { MCPAdapter } from '@langchain/mcp-adapters'
 import { MemorySaver } from '@langchain/langgraph'
 import { Wilson } from '../models/locals.js'
 import readline from 'readline'
@@ -10,6 +11,45 @@ const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 })
+
+// Crear MCPs adapter
+const mcpAdapter = new MCPAdapter({
+  servers: {
+    context7: {
+      // type: 'local',
+      command: 'pnpx',
+      args: ['-y', '@upstash/context7-mcp'],
+    },
+    playwright: {
+      // type: 'local',
+      command: 'pnpx',
+      args: ['-y', '@playwright/mcp@latest'],
+    },
+    // Servidor MCP remoto/externo (por ejemplo, Context7)
+    // context7: {
+    //   url: 'https://api.context7.com/mcp', // URL del servidor MCP externo
+    //   headers: {
+    //     Authorization: `Bearer ${process.env.CONTEXT7_API_KEY}`,
+    //   },
+    // },
+    // Opcional: Un servidor local ejecutado por stdio en paralelo
+    // localToolServer: {
+    //   command: "node",
+    //   args: ["./my-local-mcp.js"],
+    // },
+  },
+})
+
+// Inicializar MCP tools
+// try {
+const mcpTools = await mcpAdapter.listTools()
+const allTools = [
+  ...mcpTools,
+  // otherTools,
+]
+// } catch (error) {
+// console.error('Error al cargar MCPs: \n', error)
+// }
 
 // Crear memoria para mantener entre sesiones
 const checkpointer = new MemorySaver()
@@ -22,13 +62,13 @@ let currentConfig = {
   },
 }
 
-const MAX_CONTEXT_TOKENS = 3000
+const MAX_CONTEXT_TOKENS = 40000
 const COMPACTION_THRESHOLD = 0.9 * MAX_CONTEXT_TOKENS
 
 // Crear agente con middleware de resumen automático
 export const PeterAgent = createAgent({
   model: Wilson,
-  tools: [],
+  tools: allTools,
   checkpointer: checkpointer,
   systemPrompt: initSystemPrompt,
   middleware: [
